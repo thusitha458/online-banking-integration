@@ -1,0 +1,11 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:onl="http://thusitha.com/onlinebanking">
+    <soapenv:Header/>
+    <soapenv:Body>
+        <onl:upload>
+            <!--Optional:-->
+            <onl:fileName>{{fileName}}</onl:fileName>
+            <!--Optional:-->
+            <onl:fileBytes>{{fileBytes}}</onl:fileBytes>
+        </onl:upload>
+    </soapenv:Body>
+</soapenv:Envelope>

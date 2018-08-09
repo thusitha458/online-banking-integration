@@ -1,37 +1,63 @@
-const soap = require('strong-soap').soap;
-// const soap = require('soap');
+const { parseString } = require('xml2js');
+const Handlebars = require('handlebars');
 const fs = require('fs');
 
-/**
- * npm soap package cannot be used with services having methods which has arguments having target namespaces.
- * npm soap will ignore these namespaces in arguments.
- */
+const soapRequest = require('./soap-request');
 
-let url = 'http://localhost:8080/thusitha/onlineBanking?wsdl';
+const url = 'http://localhost:8080/thusitha/onlineBanking';
+
+const uploadRequestHeadersPreprocessed = fs.readFileSync('./requests/upload-request-headers.hbs', 'utf8');
+let uploadRequestHeadersTemplate = Handlebars.compile(uploadRequestHeadersPreprocessed);
+let headersJson = JSON.parse(uploadRequestHeadersTemplate({userAgent: 'BlimpIt'}));
+
+const uploadRequestXmlPreprocessed = fs.readFileSync('./requests/upload-request.hbs', 'utf8');
+let uploadRequestTemplate = Handlebars.compile(uploadRequestXmlPreprocessed);
 
 let fileBytes = new Buffer(fs.readFileSync('./to-upload/abc.txt')).toString('base64');
-// let fileBytes = getByteArray('./to-upload/abc.txt');
 
-let args = {
+let uploadRequestXml = uploadRequestTemplate({
     fileName: 'abc.txt',
     fileBytes: fileBytes
-};
-// soap.createClient(url, {preserveWhitespace: true, disableCache: true}, function(err, client) {
-//
-//     client.upload(args, function(err, result) {
-//         if (err) {
-//             return console.log('Error', err.body);
-//         }
-//         console.log(result);
-//     });
-// });
-
-soap.createClient(url, {}, function(err, client) {
-    let method = client['OnlineBankingService']['OnlineBankingPort']['upload'];
-    method(args, function(err, result, envelope, soapHeader) {
-        //response envelope
-        console.log('Response Envelope: \n' + envelope);
-        //'result' is the response body
-        console.log('Result: \n' + JSON.stringify(result));
-    });
 });
+
+const sendRequest = async () => {
+    const { response } = await soapRequest(url, headersJson, uploadRequestXml);
+    const { body, statusCode } = response;
+    parseString(body, function (err, result) {
+        constructOutput(result);
+    });
+    console.log(body);
+    console.log(statusCode);
+};
+
+sendRequest()
+    .then(() => console.log('Request successful'))
+    .catch(() => console.log('Request failed', ));
+
+const constructOutput = (result) => {
+    let newResult = {};
+    extractValuesFromJson(result, newResult);
+    console.log(JSON.stringify(newResult, undefined, 2));
+};
+
+const extractValuesFromJson = (sourceJson, targetJson) => {
+    Object.keys(sourceJson).forEach(key =>  {
+        if (key !== '$' && typeof sourceJson[key] !== 'function') {
+            if (typeof sourceJson[key] !== 'object' ) {
+                targetJson[key] = sourceJson[key];
+            } else {
+                if (sourceJson[key] instanceof Array) {
+                    targetJson[key] = [];
+                    for (let i = 0; i < sourceJson[key].length; i++) {
+                        targetJson[key][i] = {};
+                        extractValuesFromJson(sourceJson[key][i], targetJson[key][i]);
+                    }
+                } else {
+                    targetJson[key] = {};
+                    extractValuesFromJson(sourceJson[key], targetJson[key]);
+                }
+
+            }
+        }
+    });
+};
